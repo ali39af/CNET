@@ -12,11 +12,12 @@ namespace CNET.Core
         private readonly Blacklist _blacklist;
         private readonly HashSet<string> _proxyList;
         private readonly IPEndPoint _bindingAddress;
+        private readonly HashSet<IPAddress> _allowedIPs;
         private IgnoreWarningCache _ignoreWarningCache;
         private UdpClient? _udpServer;
         private CancellationTokenSource? _cts;
 
-        public DNSServer(IPEndPoint bindingAddress, Blacklist blacklist, HashSet<string> proxyList, IPEndPoint forwardDns, IPAddress webIPv4, IPAddress webIPv6, IgnoreWarningCache ignoreWarningCache)
+        public DNSServer(IPEndPoint bindingAddress, Blacklist blacklist, HashSet<string> proxyList, IPEndPoint forwardDns, IPAddress webIPv4, IPAddress webIPv6, IgnoreWarningCache ignoreWarningCache, HashSet<IPAddress> allowedIPs)
         {
             _bindingAddress = bindingAddress;
             _blacklist = blacklist;
@@ -25,6 +26,7 @@ namespace CNET.Core
             _webIPv4 = webIPv4;
             _webIPv6 = webIPv6;
             _ignoreWarningCache = ignoreWarningCache;
+            _allowedIPs = allowedIPs;
         }
 
         public void Start()
@@ -42,6 +44,11 @@ namespace CNET.Core
                     {
                         IPEndPoint client = new(IPAddress.Loopback, 0);
                         byte[] req = _udpServer.Receive(ref client);
+
+                        if (_allowedIPs.Count > 0 && _allowedIPs.Contains(client.Address))
+                        {
+                            return;
+                        }
 
                         ThreadPool.QueueUserWorkItem(__ => ProcessRequest(req, client));
                     }

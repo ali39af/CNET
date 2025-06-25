@@ -14,7 +14,7 @@ CENT is your all-in-one browser protection tool designed to create a cleaner, sa
   Automatically filter out inappropriate or explicit content for a safer online environment.
 
 - **🧩 Flexible Control**  
-  You can disable NSFW and scam protection features at any time through the settings.
+  You can disable NSFW and scam protection features at any time through the blocked webpage with a button.
 
 ## ✅ Why Use CENT?
 

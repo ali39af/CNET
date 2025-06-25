@@ -40,7 +40,8 @@ clean and safe internet for everyone
 
             // Proxy List Stuff
 
-            HashSet<string> proxyList = new(["*aparat.com", "*nic.ir"]);
+            HashSet<string> proxyList = new(["example.com", "*example.com"]);
+            HashSet<IPAddress> allowedList = new([IPAddress.Parse("127.0.0.1")]); // leave it empty to allow anyone use dns and router
 
             // Loading and init DNSServer Stuff
             Console.Write("Starting DNS Service ");
@@ -51,7 +52,8 @@ clean and safe internet for everyone
                 new IPEndPoint(IPAddress.Parse("8.8.8.8"), 53),
                 IPAddress.Parse("127.0.0.1"), // Give Public IPV4 Address WebRouter Service Listen on 443, 80 port 
                 IPAddress.Parse("::1"), // Give Public IPV6 Address WebRouter Service Listen on 443, 80 port
-                sharedIgnoreCache
+                sharedIgnoreCache,
+                allowedList
             );
             try
             {
@@ -74,7 +76,8 @@ clean and safe internet for everyone
                 blacklist,
                 proxyList,
                 new DNSClient("8.8.8.8", 53),
-                sharedIgnoreCache
+                sharedIgnoreCache,
+                allowedList
             );
             try
             {

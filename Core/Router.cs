@@ -16,7 +16,7 @@ namespace CNET
         private readonly IPEndPoint _bindingHTTPSAddress;
         private readonly Blacklist _blacklist;
         private readonly HashSet<string> _proxyList;
-
+        private readonly HashSet<IPAddress> _allowedIPs;
         private TcpListener _httpListener;
         private TcpListener _httpsListener;
         private CancellationTokenSource _cts;
@@ -27,7 +27,7 @@ namespace CNET
         private readonly string _NSFW;
         private readonly string _SCAM;
 
-        public Router(IPEndPoint bindingHTTPAddress, IPEndPoint bindingHTTPSAddress, Blacklist blacklist, HashSet<string> proxyList, DNSClient dnsClient, IgnoreWarningCache ignoreWarningCache)
+        public Router(IPEndPoint bindingHTTPAddress, IPEndPoint bindingHTTPSAddress, Blacklist blacklist, HashSet<string> proxyList, DNSClient dnsClient, IgnoreWarningCache ignoreWarningCache, HashSet<IPAddress> allowedIPs)
         {
             _bindingHTTPAddress = bindingHTTPAddress;
             _bindingHTTPSAddress = bindingHTTPSAddress;
@@ -35,6 +35,7 @@ namespace CNET
             _proxyList = proxyList;
             _dnsClient = dnsClient;
             _ignoreWarningCache = ignoreWarningCache;
+            _allowedIPs = allowedIPs;
 
             var assembly = Assembly.GetExecutingAssembly();
 
@@ -127,6 +128,11 @@ namespace CNET
         {
             using (client)
             {
+                IPEndPoint? remoteEndPoint = client.Client.RemoteEndPoint as IPEndPoint;
+                if (remoteEndPoint != null && _allowedIPs.Count > 0 && _allowedIPs.Contains(remoteEndPoint.Address))
+                {
+                    return;
+                }
                 var stream = client.GetStream();
                 var reader = new StreamReader(stream, leaveOpen: true);
                 var writer = new StreamWriter(stream) { AutoFlush = true };
@@ -154,7 +160,6 @@ namespace CNET
                     if (hostLine == null) return;
                     string host = hostLine.Substring(5).Trim();
 
-                    IPEndPoint? remoteEndPoint = client.Client.RemoteEndPoint as IPEndPoint;
 #if DEBUG
                     if (remoteEndPoint != null)
                     {
@@ -206,6 +211,11 @@ namespace CNET
         {
             using (client)
             {
+                IPEndPoint? remoteEndPoint = client.Client.RemoteEndPoint as IPEndPoint;
+                if (remoteEndPoint != null && _allowedIPs.Count > 0 && _allowedIPs.Contains(remoteEndPoint.Address))
+                {
+                    return;
+                }
                 var stream = client.GetStream();
                 var buffer = new byte[1024];
                 int read = await stream.ReadAsync(buffer, 0, buffer.Length);
@@ -214,7 +224,6 @@ namespace CNET
                 string sni = ExtractSNIFromClientHello(buffer);
                 if (sni == null) return;
 
-                IPEndPoint? remoteEndPoint = client.Client.RemoteEndPoint as IPEndPoint;
 #if DEBUG
                 if (remoteEndPoint != null)
                 {
