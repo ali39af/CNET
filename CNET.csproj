@@ -13,6 +13,10 @@
     <Content Include="data\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+
+  <EmbeddedResource Include="wwwroot\ADS.html" />
+  <EmbeddedResource Include="wwwroot\SCAM.html" />
+  <EmbeddedResource Include="wwwroot\NSFW.html" />
   </ItemGroup>
 
 </Project>

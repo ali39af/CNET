@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Text.RegularExpressions;
 
 namespace CNET.Core
 {
@@ -9,17 +10,21 @@ namespace CNET.Core
         private readonly IPAddress _webIPv6;
         private readonly IPEndPoint _forwardDns;
         private readonly Blacklist _blacklist;
+        private readonly HashSet<string> _proxyList;
         private readonly IPEndPoint _bindingAddress;
+        private IgnoreWarningCache _ignoreWarningCache;
         private UdpClient? _udpServer;
         private CancellationTokenSource? _cts;
 
-        public DNSServer(IPEndPoint bindingAddress, Blacklist blacklist, IPEndPoint forwardDns, IPAddress webIPv4, IPAddress webIPv6)
+        public DNSServer(IPEndPoint bindingAddress, Blacklist blacklist, HashSet<string> proxyList, IPEndPoint forwardDns, IPAddress webIPv4, IPAddress webIPv6, IgnoreWarningCache ignoreWarningCache)
         {
             _bindingAddress = bindingAddress;
             _blacklist = blacklist;
+            _proxyList = proxyList;
             _forwardDns = forwardDns;
             _webIPv4 = webIPv4;
             _webIPv6 = webIPv6;
+            _ignoreWarningCache = ignoreWarningCache;
         }
 
         public void Start()
@@ -31,23 +36,29 @@ namespace CNET.Core
 
             ThreadPool.QueueUserWorkItem(_ =>
             {
-                try
+                while (!token.IsCancellationRequested)
                 {
-                    while (!token.IsCancellationRequested)
+                    try
                     {
                         IPEndPoint client = new(IPAddress.Loopback, 0);
                         byte[] req = _udpServer.Receive(ref client);
 
-                        if (!client.Address.Equals(IPAddress.Loopback))
-                            break;
-
                         ThreadPool.QueueUserWorkItem(__ => ProcessRequest(req, client));
                     }
+                    catch (SocketException ex) when (ex.SocketErrorCode == SocketError.Interrupted)
+                    {
+                        if (token.IsCancellationRequested)
+                            break;
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        if (token.IsCancellationRequested)
+                            break;
+                    }
+                    catch (Exception) { }
                 }
-                catch (SocketException ex) when (ex.SocketErrorCode == SocketError.Interrupted) { }
-                catch (ObjectDisposedException) { }
-                catch { }
             });
+
         }
 
         public void Stop()
@@ -67,13 +78,21 @@ namespace CNET.Core
                 var (isBlocked, _) = _blacklist.Exist(domain);
                 var type = GetQueryType(req);
 
+                if (isBlocked)
+                    isBlocked = !_ignoreWarningCache.Contains(domain, client.Address);
+
+                bool isInProxyList = !isBlocked ? IsInList.Exist(_proxyList, domain) : false;
+
+                bool isRedirected = (isBlocked && (type == QueryType.A || type == QueryType.AAAA)) || isInProxyList;
+
 #if DEBUG
                 Console.ForegroundColor = ConsoleColor.White;
-                Console.WriteLine($"[DNS] {(isBlocked ? "Blocked" : "Forwarded")} {type} {domain} From {client}");
+                Console.WriteLine($"[DNS] {(isRedirected ? "Redirected" : "Forwarded")} {type} {domain} From {client}");
 #endif
 
-                byte[] res = isBlocked && (type == QueryType.A || type == QueryType.AAAA)
-                    ? CreateLocalResponse(req)
+
+                byte[] res = isRedirected
+                    ? CreateLocalResponse(req, isBlocked ? 1 : 30)
                     : ForwardRequest(req);
 
                 _udpServer?.Send(res, res.Length, client);
@@ -133,7 +152,7 @@ namespace CNET.Core
             return Enum.IsDefined(typeof(QueryType), qtype) ? (QueryType)qtype : QueryType.Unknown;
         }
 
-        private byte[] CreateLocalResponse(byte[] req)
+        private byte[] CreateLocalResponse(byte[] req, int ttl = 30)
         {
             using var ms = new MemoryStream();
             ms.Write(req, 0, 12);
@@ -157,15 +176,19 @@ namespace CNET.Core
 
             ms.Write([
                 0xC0, 0x0C,
-                req[qEnd - 4], req[qEnd - 3],
-                0x00, 0x01,
-                0x00, 0x00, 0x00, 0x1E,
-                0x00, (byte)ip.Length
+        req[qEnd - 4], req[qEnd - 3],
+        0x00, 0x01,
+        (byte)((ttl >> 24) & 0xFF),
+        (byte)((ttl >> 16) & 0xFF),
+        (byte)((ttl >> 8) & 0xFF),
+        (byte)(ttl & 0xFF),
+        0x00, (byte)ip.Length
             ]);
             ms.Write(ip, 0, ip.Length);
 
             return ms.ToArray();
         }
+
 
         private byte[] CreateErrorResponse(byte[] req)
         {

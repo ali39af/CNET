@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adult Content Blocked</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            line-height: 1.6;
+            background-color: #f8f9fa;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 500px;
+            width: 100%;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+        }
+
+        .header {
+            background-color: #dc3545;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 16px;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 25px;
+            color: #856404;
+            font-size: 14px;
+        }
+
+        .warning-icon {
+            font-size: 20px;
+            margin-right: 8px;
+        }
+
+        .checkbox-group {
+            margin-bottom: 30px;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 15px;
+            padding: 12px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border: 2px solid transparent;
+            transition: border-color 0.2s ease;
+        }
+
+        .checkbox-item:hover {
+            border-color: #e9ecef;
+        }
+
+        .checkbox-item input[type="checkbox"] {
+            margin-right: 12px;
+            margin-top: 2px;
+            width: 18px;
+            height: 18px;
+            accent-color: #dc3545;
+        }
+
+        .checkbox-item label {
+            cursor: pointer;
+            font-size: 14px;
+            color: #495057;
+            user-select: none;
+        }
+
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .btn {
+            padding: 14px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+            text-decoration: none;
+            display: block;
+        }
+
+        .btn-danger {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background-color: #c82333;
+        }
+
+        .btn-danger:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background-color: #5a6268;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                margin: 10px;
+            }
+
+            .header,
+            .content {
+                padding: 20px;
+            }
+
+            .header h1 {
+                font-size: 20px;
+            }
+
+            .icon {
+                font-size: 40px;
+            }
+
+            .btn {
+                padding: 12px 20px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="icon">🔞</div>
+            <h1>Adult Content Blocked</h1>
+            <p>This content has been filtered as it may contain adult material</p>
+        </div>
+
+        <div class="content">
+            <div class="warning">
+                <span class="warning-icon">⚠️</span>
+                By proceeding, you confirm that you are 18+ years old and understand that this content may contain
+                explicit material.
+            </div>
+
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="age-confirm" required>
+                    <label for="age-confirm">I confirm that I am 18 years of age or older</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="responsibility-confirm" required>
+                    <label for="responsibility-confirm">I understand the nature of this content and accept full
+                        responsibility</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="legal-confirm" required>
+                    <label for="legal-confirm">I confirm that accessing this content is legal in my jurisdiction</label>
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button class="btn btn-danger" onclick="proceedNSFW()" id="proceed-btn" disabled>
+                    I'm 18+ and I Know What I'm Doing
+                </button>
+                <button class="btn btn-secondary" onclick="goBack()">
+                    Take Me Back to Safety
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function updateProceedButton() {
+            const checkboxes = document.querySelectorAll("input[type='checkbox']");
+            const proceedBtn = document.getElementById("proceed-btn");
+            const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+
+            proceedBtn.disabled = !allChecked;
+        }
+
+        document.querySelectorAll("input[type='checkbox']").forEach(checkbox => {
+            checkbox.addEventListener("change", updateProceedButton);
+        });
+
+        function proceedNSFW() {
+
+            fetch("/ignore", {
+                method: "POST"
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error("Network response was not ok");
+                    }
+                    alert("Access granted. Remember to browse responsibly.");
+                    location.reload();
+                })
+                .catch(error => {
+                    console.error("Error sending POST request:", error);
+                });
+        }
+
+        function goBack() {
+            alert("Good choice! Staying safe online is always the best option.");
+            window.history.back();
+        }
+    </script>
+
+</body>
+
+</html>

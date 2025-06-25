@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Potential Threat Detected</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            line-height: 1.6;
+            background-color: #f8f9fa;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 500px;
+            width: 100%;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+            border: 3px solid #dc3545;
+        }
+
+        .header {
+            background-color: #dc3545;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.1);
+                opacity: 0.8;
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 16px;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .danger-warning {
+            background-color: #f8d7da;
+            border: 2px solid #dc3545;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 25px;
+            color: #721c24;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .danger-icon {
+            font-size: 20px;
+            margin-right: 8px;
+        }
+
+        .threat-details {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        .threat-details h3 {
+            color: #856404;
+            font-size: 16px;
+            margin-bottom: 12px;
+        }
+
+        .threat-details ul {
+            list-style: none;
+            padding: 0;
+            color: #856404;
+        }
+
+        .threat-details li {
+            padding: 4px 0;
+            font-size: 14px;
+        }
+
+        .threat-details li::before {
+            content: "⚠️";
+            margin-right: 8px;
+        }
+
+        .security-challenge {
+            background-color: #f8f9fa;
+            border: 2px dashed #6c757d;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 25px;
+            text-align: center;
+        }
+
+        .challenge-title {
+            color: #495057;
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 15px;
+        }
+
+        .math-puzzle {
+            background-color: #212529;
+            color: #28a745;
+            font-family: "Courier New", monospace;
+            font-size: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+            letter-spacing: 2px;
+            font-weight: bold;
+        }
+
+        .challenge-input {
+            width: 100%;
+            max-width: 120px;
+            padding: 12px;
+            border: 2px solid #dee2e6;
+            border-radius: 6px;
+            font-size: 18px;
+            text-align: center;
+            margin: 10px 0;
+        }
+
+        .challenge-input:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+
+        .challenge-note {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 10px;
+        }
+
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .btn {
+            padding: 14px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+            text-decoration: none;
+            display: block;
+        }
+
+        .btn-danger {
+            background-color: #dc3545;
+            color: white;
+            opacity: 0.3;
+            font-size: 12px;
+            padding: 8px 16px;
+        }
+
+        .btn-danger:hover {
+            opacity: 1;
+            font-size: 16px;
+            padding: 14px 24px;
+        }
+
+        .btn-safe {
+            background-color: #28a745;
+            color: white;
+            font-weight: 600;
+        }
+
+        .btn-safe:hover {
+            background-color: #218838;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                margin: 10px;
+            }
+
+            .header,
+            .content {
+                padding: 20px;
+            }
+
+            .header h1 {
+                font-size: 20px;
+            }
+
+            .icon {
+                font-size: 40px;
+            }
+
+            .btn {
+                padding: 12px 20px;
+                font-size: 14px;
+            }
+
+            .btn-danger:hover {
+                font-size: 14px;
+                padding: 12px 20px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="icon">⚠️</div>
+            <h1>Potential Threat Detected</h1>
+            <p>This content has been flagged as potentially dangerous</p>
+        </div>
+
+        <div class="content">
+            <div class="danger-warning">
+                <span class="danger-icon">🚨</span>
+                <strong>DANGER:</strong> This site may attempt to steal your personal information, install malware, or
+                scam you out of money.
+            </div>
+
+            <div class="threat-details">
+                <h3>Potential Threats Include:</h3>
+                <ul>
+                    <li>Identity theft and personal data harvesting</li>
+                    <li>Financial fraud and unauthorized transactions</li>
+                    <li>Malware installation and system compromise</li>
+                    <li>Phishing attempts and credential theft</li>
+                    <li>Fake services and advance fee fraud</li>
+                </ul>
+            </div>
+
+            <div class="security-challenge">
+                <div class="challenge-title">Security Verification Required</div>
+                <p style="font-size: 14px; color: #6c757d; margin-bottom: 15px;">
+                    To proceed, solve this math problem to prove you're paying attention:
+                </p>
+                <div class="math-puzzle" id="math-puzzle">13 + 29 = ?</div>
+                <input type="number" class="challenge-input" id="math-answer" placeholder="Answer">
+                <div class="challenge-note">
+                    This challenge ensures you understand the security warnings above.
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button class="btn btn-safe" onclick="goBack()">
+                    Keep Me Safe (Recommended)
+                </button>
+                <button class="btn btn-danger" onclick="proceedWithRisk()" title="Hover to reveal button">
+                    I Accept All Risks
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let correctAnswer = 42;
+
+        function generateMathProblem() {
+            const a = Math.floor(Math.random() * 30) + 10;
+            const b = Math.floor(Math.random() * 30) + 10;
+            correctAnswer = a + b;
+            document.getElementById("math-puzzle").textContent = `${a} + ${b} = ?`;
+        }
+
+        function proceedWithRisk() {
+            const userAnswer = parseInt(document.getElementById("math-answer").value);
+
+            if (userAnswer === correctAnswer) {
+                if (confirm("Are you absolutely sure you want to visit this potentially dangerous site?\n\nThis is your final warning - you may be putting your personal information and device at risk.")) {
+                    if (confirm("Last chance to reconsider. The site you are about to visit has been flagged for malicious activity.\n\nClick OK only if you fully understand the risks.")) {
+
+                        fetch("/ignore", { method: "POST" })
+                            .then(response => {
+                                if (!response.ok) throw new Error("Network error");
+                                alert("Proceeding at your own risk. Stay vigilant and do not enter any personal information.");
+                                location.reload();
+                            })
+                            .catch(error => {
+                                console.error("POST failed:", error);
+                            });
+                    }
+                }
+            } else {
+                alert("Incorrect answer. Please solve the math problem correctly to demonstrate you are paying attention to the security warnings.");
+                generateMathProblem();
+                document.getElementById("math-answer").value = "";
+            }
+        }
+
+        function goBack() {
+            alert("Excellent choice! You are being redirected to a safe location.");
+            location.replace("https://google.com")
+        }
+
+        generateMathProblem();
+    </script>
+
+</body>
+
+</html>

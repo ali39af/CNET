@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -20,13 +21,65 @@ namespace CNET
         private TcpListener _httpsListener;
         private CancellationTokenSource _cts;
         private Timer _statsResetTimer;
+        private DNSClient _dnsClient;
+        private IgnoreWarningCache _ignoreWarningCache;
+        private readonly string _ADS;
+        private readonly string _NSFW;
+        private readonly string _SCAM;
 
-        public Router(IPEndPoint bindingHTTPAddress, IPEndPoint bindingHTTPSAddress, Blacklist blacklist, HashSet<string> proxyList)
+        public Router(IPEndPoint bindingHTTPAddress, IPEndPoint bindingHTTPSAddress, Blacklist blacklist, HashSet<string> proxyList, DNSClient dnsClient, IgnoreWarningCache ignoreWarningCache)
         {
             _bindingHTTPAddress = bindingHTTPAddress;
             _bindingHTTPSAddress = bindingHTTPSAddress;
             _blacklist = blacklist;
             _proxyList = proxyList;
+            _dnsClient = dnsClient;
+            _ignoreWarningCache = ignoreWarningCache;
+
+            var assembly = Assembly.GetExecutingAssembly();
+
+            using (Stream stream = assembly.GetManifestResourceStream("CNET.wwwroot.ADS.html"))
+            {
+                if (stream == null)
+                {
+                    Console.WriteLine("ADS Resource not found.");
+                    _ADS = string.Empty;
+                }
+                else
+                {
+                    using StreamReader reader = new StreamReader(stream);
+                    _ADS = reader.ReadToEnd();
+                }
+            }
+
+            using (Stream stream = assembly.GetManifestResourceStream("CNET.wwwroot.NSFW.html"))
+            {
+                if (stream == null)
+                {
+                    Console.WriteLine("NSFW Resource not found.");
+                    _NSFW = string.Empty;
+                }
+                else
+                {
+                    using StreamReader reader = new StreamReader(stream);
+                    _NSFW = reader.ReadToEnd();
+                }
+            }
+
+            using (Stream stream = assembly.GetManifestResourceStream("CNET.wwwroot.SCAM.html"))
+            {
+                if (stream == null)
+                {
+                    Console.WriteLine("SCAM Resource not found.");
+                    _SCAM = string.Empty;
+                }
+                else
+                {
+                    using StreamReader reader = new StreamReader(stream);
+                    _SCAM = reader.ReadToEnd();
+                }
+            }
+
         }
 
         public void Start()
@@ -83,18 +136,26 @@ namespace CNET
                     string requestLine = await reader.ReadLineAsync();
                     if (string.IsNullOrEmpty(requestLine)) return;
 
+                    var requestBuilder = new StringBuilder();
+                    requestBuilder.AppendLine(requestLine);
+
                     string hostLine = null;
                     while (!string.IsNullOrEmpty(hostLine = await reader.ReadLineAsync()))
                     {
+                        requestBuilder.AppendLine(hostLine);
                         if (hostLine.StartsWith("Host:", StringComparison.OrdinalIgnoreCase))
                             break;
                     }
 
+                    requestBuilder.AppendLine();
+
+                    byte[] initialData = Encoding.ASCII.GetBytes(requestBuilder.ToString());
+
                     if (hostLine == null) return;
                     string host = hostLine.Substring(5).Trim();
 
-#if DEBUG
                     IPEndPoint? remoteEndPoint = client.Client.RemoteEndPoint as IPEndPoint;
+#if DEBUG
                     if (remoteEndPoint != null)
                     {
                         Console.ForegroundColor = ConsoleColor.White;
@@ -103,15 +164,39 @@ namespace CNET
                     }
 #endif
 
+                    var parts = requestLine.Split(' ');
+                    if (parts.Length >= 2)
+                    {
+                        string method = parts[0];
+                        string path = parts[1];
+
+                        if (method.Equals("POST", StringComparison.OrdinalIgnoreCase) &&
+                            path.Equals("/ignore", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (remoteEndPoint != null)
+                            {
+                                _ignoreWarningCache.Add(host, remoteEndPoint.Address);
+                            }
+
+                            string response = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
+                            byte[] responseBytes = Encoding.ASCII.GetBytes(response);
+                            await stream.WriteAsync(responseBytes, 0, responseBytes.Length);
+                            return;
+                        }
+                    }
+
                     var (blocked, type) = _blacklist.Exist(host);
                     if (blocked)
                     {
-                        await SendBlockPageAsync(stream, host, type);
-                        return;
+                        if (!(remoteEndPoint != null && _ignoreWarningCache.Contains(host, remoteEndPoint.Address)))
+                        {
+                            await SendBlockPageAsync(stream, host, type);
+                            return;
+                        }
                     }
 
-                    if (IsInProxyList(host))
-                        await ProxyTcpAsync(client, host, 80, null);
+                    if (IsInList.Exist(_proxyList, host))
+                        await ProxyTcpAsync(client, host, 80, initialData);
                 }
                 catch { }
             }
@@ -129,8 +214,8 @@ namespace CNET
                 string sni = ExtractSNIFromClientHello(buffer);
                 if (sni == null) return;
 
-#if DEBUG
                 IPEndPoint? remoteEndPoint = client.Client.RemoteEndPoint as IPEndPoint;
+#if DEBUG
                 if (remoteEndPoint != null)
                 {
                     Console.ForegroundColor = ConsoleColor.White;
@@ -139,14 +224,16 @@ namespace CNET
                 }
 #endif
 
-                var (blocked, _) = _blacklist.Exist(sni);
+                var (blocked, type) = _blacklist.Exist(sni);
                 if (blocked)
                 {
-                    await SendHttpsRedirectAsync(stream, sni);
-                    return;
+                    if (!(remoteEndPoint != null && _ignoreWarningCache.Contains(sni, remoteEndPoint.Address)))
+                    {
+                        return;
+                    }
                 }
 
-                if (IsInProxyList(sni))
+                if (IsInList.Exist(_proxyList, sni))
                     await ProxyTcpAsync(client, sni, 443, buffer[..read]);
             }
         }
@@ -165,7 +252,7 @@ namespace CNET
             using var target = new TcpClient();
             try
             {
-                await target.ConnectAsync(host, port);
+                await target.ConnectAsync(await _dnsClient.ResolveAAsync(host), port);
                 using var clientStream = client.GetStream();
                 using var targetStream = target.GetStream();
 
@@ -211,30 +298,10 @@ namespace CNET
 
         private async Task SendBlockPageAsync(NetworkStream stream, string domain, BlacklistType type)
         {
-            string html = $"<html><body><h1>Blocked: {type}</h1><p>{domain} is restricted.</p></body></html>";
+            string html = type == BlacklistType.NSFW ? _NSFW : type == BlacklistType.ADS ? _ADS : _SCAM;
             string response = $"HTTP/1.1 403 Forbidden\r\nContent-Type: text/html\r\nContent-Length: {Encoding.UTF8.GetByteCount(html)}\r\n\r\n{html}";
             byte[] bytes = Encoding.UTF8.GetBytes(response);
             await stream.WriteAsync(bytes);
-        }
-
-        private async Task SendHttpsRedirectAsync(NetworkStream stream, string domain)
-        {
-            string html = $"<html><body><h1>Blocked (HTTPS)</h1><p>{domain} is redirected due to security policy.</p></body></html>";
-            string response = $"HTTP/1.1 302 Found\r\nLocation: http://{domain}/blocked\r\nContent-Type: text/html\r\nContent-Length: {Encoding.UTF8.GetByteCount(html)}\r\n\r\n{html}";
-            byte[] bytes = Encoding.UTF8.GetBytes(response);
-            await stream.WriteAsync(bytes);
-        }
-
-        private bool IsInProxyList(string domain)
-        {
-            foreach (var pattern in _proxyList)
-            {
-                if (pattern == "*") return true;
-                string regex = "^" + Regex.Escape(pattern).Replace("\\*", ".*") + "$";
-                if (Regex.IsMatch(domain, regex, RegexOptions.IgnoreCase))
-                    return true;
-            }
-            return false;
         }
 
         private string ExtractSNIFromClientHello(byte[] data)
@@ -242,40 +309,55 @@ namespace CNET
             try
             {
                 int pos = 0;
-                if (data[0] != 0x16) return null;
-                pos += 5; // skip record header
-                pos += 34; // skip handshake + random
 
-                int sessionIDLen = data[pos];
-                pos += 1 + sessionIDLen;
+                if (data[0] != 0x16)
+                    return null;
 
-                int cipherLen = (data[pos] << 8) + data[pos + 1];
-                pos += 2 + cipherLen;
+                pos += 5;
+                if (data[pos] != 0x01)
+                    return null;
 
-                int compLen = data[pos];
-                pos += 1 + compLen;
+                pos += 4;
 
-                int extLen = (data[pos] << 8) + data[pos + 1];
                 pos += 2;
+                pos += 32;
 
-                int end = pos + extLen;
+                int sessionIdLength = data[pos];
+                pos += 1 + sessionIdLength;
 
-                while (pos + 4 <= end)
+                int cipherSuitesLength = (data[pos] << 8) | data[pos + 1];
+                pos += 2 + cipherSuitesLength;
+
+                int compressionMethodsLength = data[pos];
+                pos += 1 + compressionMethodsLength;
+
+                int extensionsLength = (data[pos] << 8) | data[pos + 1];
+                pos += 2;
+                int extensionsEnd = pos + extensionsLength;
+
+                while (pos + 4 <= extensionsEnd)
                 {
-                    int type = (data[pos] << 8) + data[pos + 1];
-                    int len = (data[pos + 2] << 8) + data[pos + 3];
+                    int extensionType = (data[pos] << 8) | data[pos + 1];
+                    int extensionLength = (data[pos + 2] << 8) | data[pos + 3];
                     pos += 4;
 
-                    if (type == 0x00 && len > 5)
+                    if (extensionType == 0x00)
                     {
-                        int sniLen = (data[pos + 2] << 8) + data[pos + 3];
-                        return Encoding.ASCII.GetString(data, pos + 5, sniLen);
+                        int sniListLength = (data[pos] << 8) | data[pos + 1];
+                        int sniType = data[pos + 2];
+                        int sniNameLength = (data[pos + 3] << 8) | data[pos + 4];
+
+                        if (sniType != 0x00) return null;
+
+                        return Encoding.ASCII.GetString(data, pos + 5, sniNameLength);
                     }
 
-                    pos += len;
+                    pos += extensionLength;
                 }
             }
-            catch { }
+            catch
+            { }
+
             return null;
         }
     }
