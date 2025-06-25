@@ -1,0 +1,202 @@
+using System.Net;
+using System.Net.Sockets;
+
+namespace CNET.Core
+{
+    public class DNSServer
+    {
+        private readonly IPAddress _webIPv4;
+        private readonly IPAddress _webIPv6;
+        private readonly IPEndPoint _forwardDns;
+        private readonly Blacklist _blacklist;
+        private readonly IPEndPoint _bindingAddress;
+        private UdpClient? _udpServer;
+        private CancellationTokenSource? _cts;
+
+        public DNSServer(IPEndPoint bindingAddress, Blacklist blacklist, IPEndPoint forwardDns, IPAddress webIPv4, IPAddress webIPv6)
+        {
+            _bindingAddress = bindingAddress;
+            _blacklist = blacklist;
+            _forwardDns = forwardDns;
+            _webIPv4 = webIPv4;
+            _webIPv6 = webIPv6;
+        }
+
+        public void Start()
+        {
+            _cts = new CancellationTokenSource();
+            _udpServer = new UdpClient(_bindingAddress);
+
+            var token = _cts.Token;
+
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try
+                {
+                    while (!token.IsCancellationRequested)
+                    {
+                        IPEndPoint client = new(IPAddress.Loopback, 0);
+                        byte[] req = _udpServer.Receive(ref client);
+
+                        if (!client.Address.Equals(IPAddress.Loopback))
+                            break;
+
+                        ThreadPool.QueueUserWorkItem(__ => ProcessRequest(req, client));
+                    }
+                }
+                catch (SocketException ex) when (ex.SocketErrorCode == SocketError.Interrupted) { }
+                catch (ObjectDisposedException) { }
+                catch { }
+            });
+        }
+
+        public void Stop()
+        {
+            _cts?.Cancel();
+            _udpServer?.Close();
+            _udpServer?.Dispose();
+            _cts?.Dispose();
+            _cts = null;
+        }
+
+        private void ProcessRequest(byte[] req, IPEndPoint client)
+        {
+            try
+            {
+                string domain = ExtractDomain(req);
+                var (isBlocked, _) = _blacklist.Exist(domain);
+                var type = GetQueryType(req);
+
+#if DEBUG
+                Console.ForegroundColor = ConsoleColor.White;
+                Console.WriteLine($"[DNS] {(isBlocked ? "Blocked" : "Forwarded")} {type} {domain} From {client}");
+#endif
+
+                byte[] res = isBlocked && (type == QueryType.A || type == QueryType.AAAA)
+                    ? CreateLocalResponse(req)
+                    : ForwardRequest(req);
+
+                _udpServer?.Send(res, res.Length, client);
+            }
+            catch
+            {
+                try
+                {
+                    var err = CreateErrorResponse(req);
+                    _udpServer?.Send(err, err.Length, client);
+                }
+                catch { }
+            }
+        }
+
+        private string ExtractDomain(byte[] req)
+        {
+            if (req.Length < 12) return "unknown";
+
+            var name = new List<string>();
+            int i = 12;
+
+            while (i < req.Length && req[i] != 0)
+            {
+                int len = req[i++];
+                if (i + len > req.Length) break;
+                name.Add(System.Text.Encoding.ASCII.GetString(req, i, len));
+                i += len;
+            }
+
+            return string.Join('.', name);
+        }
+
+        private enum QueryType : ushort
+        {
+            Unknown = 0,
+            A = 1,
+            AAAA = 28,
+            CNAME = 5,
+            MX = 15,
+            TXT = 16
+        }
+
+        private QueryType GetQueryType(byte[] req)
+        {
+            int i = 12;
+            while (i < req.Length && req[i] != 0)
+            {
+                if (i + req[i] >= req.Length) return QueryType.Unknown;
+                i += req[i] + 1;
+            }
+
+            i++;
+            if (i + 4 > req.Length) return QueryType.Unknown;
+
+            ushort qtype = (ushort)((req[i] << 8) | req[i + 1]);
+            return Enum.IsDefined(typeof(QueryType), qtype) ? (QueryType)qtype : QueryType.Unknown;
+        }
+
+        private byte[] CreateLocalResponse(byte[] req)
+        {
+            using var ms = new MemoryStream();
+            ms.Write(req, 0, 12);
+
+            ms.Position = 2;
+            ms.WriteByte(0x81);
+            ms.WriteByte(0x80);
+
+            ms.Position = 6;
+            ms.Write([0x00, 0x01, 0x00, 0x00, 0x00, 0x00]);
+
+            int qEnd = 12;
+            while (qEnd < req.Length && req[qEnd] != 0)
+                qEnd += req[qEnd] + 1;
+            qEnd += 5;
+
+            ms.Write(req, 12, qEnd - 12);
+
+            bool isAAAA = ((req[qEnd - 4] << 8) | req[qEnd - 3]) == 28;
+            byte[] ip = isAAAA ? _webIPv6.GetAddressBytes() : _webIPv4.GetAddressBytes();
+
+            ms.Write([
+                0xC0, 0x0C,
+                req[qEnd - 4], req[qEnd - 3],
+                0x00, 0x01,
+                0x00, 0x00, 0x00, 0x1E,
+                0x00, (byte)ip.Length
+            ]);
+            ms.Write(ip, 0, ip.Length);
+
+            return ms.ToArray();
+        }
+
+        private byte[] CreateErrorResponse(byte[] req)
+        {
+            var res = new byte[Math.Min(req.Length, 12)];
+            Array.Copy(req, res, res.Length);
+
+            if (res.Length >= 3)
+            {
+                res[2] = 0x81;
+                res[3] = 0x82;
+            }
+
+            return res;
+        }
+
+        private byte[] ForwardRequest(byte[] req)
+        {
+            try
+            {
+                using var client = new UdpClient();
+                client.Client.ReceiveTimeout = 1900;
+                client.Connect(_forwardDns);
+                client.Send(req, req.Length);
+
+                IPEndPoint ep = new(IPAddress.Any, 0);
+                return client.Receive(ref ep);
+            }
+            catch
+            {
+                return CreateErrorResponse(req);
+            }
+        }
+    }
+}
