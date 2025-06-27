@@ -1,0 +1,2 @@
+check-host.net
+ipinfo.io

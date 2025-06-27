@@ -14,6 +14,7 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
 
+  <EmbeddedResource Include="wwwroot\Login.html" />
   <EmbeddedResource Include="wwwroot\ADS.html" />
   <EmbeddedResource Include="wwwroot\SCAM.html" />
   <EmbeddedResource Include="wwwroot\NSFW.html" />

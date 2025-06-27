@@ -39,9 +39,12 @@ clean and safe internet for everyone
             IgnoreWarningCache sharedIgnoreCache = new();
 
             // Proxy List Stuff
+            HashSet<string> proxyList = new(File.ReadAllText(Path.Join(Environment.CurrentDirectory, "data", "proxy-list.txt")).Split('\n').Select(line => line.Trim('\r')).ToArray());
 
-            HashSet<string> proxyList = new(["example.com", "*example.com"]);
+            // Security Stuff
+            bool proxyOnlyWhenLogin = true;
             HashSet<IPAddress> allowedList = new([IPAddress.Parse("127.0.0.1")]); // leave it empty to allow anyone use dns and router
+            LoginCache sharedLoginCache = new();
 
             // Loading and init DNSServer Stuff
             Console.Write("Starting DNS Service ");
@@ -53,7 +56,9 @@ clean and safe internet for everyone
                 IPAddress.Parse("127.0.0.1"), // Give Public IPV4 Address WebRouter Service Listen on 443, 80 port 
                 IPAddress.Parse("::1"), // Give Public IPV6 Address WebRouter Service Listen on 443, 80 port
                 sharedIgnoreCache,
-                allowedList
+                allowedList,
+                proxyOnlyWhenLogin,
+                sharedLoginCache
             );
             try
             {
@@ -77,7 +82,9 @@ clean and safe internet for everyone
                 proxyList,
                 new DNSClient("8.8.8.8", 53),
                 sharedIgnoreCache,
-                allowedList
+                allowedList,
+                proxyOnlyWhenLogin,
+                sharedLoginCache
             );
             try
             {
