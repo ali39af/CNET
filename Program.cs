@@ -102,19 +102,21 @@ clean and safe internet for everyone
 
             int lastStatusLine = Console.WindowHeight - 1;
 
-            while (true)
-            {
-                string status = $"Proxy [Active {routerServer.ProxyActiveConnections} Tunnels] [In {FormatBytes.FromULONG(routerServer.ProxyCurrentInputBytes)}/Sec] [Out {FormatBytes.FromULONG(routerServer.ProxyCurrentOutputBytes)}/Sec]";
+            Thread.Sleep(Timeout.Infinite);
 
-                int curLeft = Console.CursorLeft;
-                int curTop = Console.CursorTop;
+            // while (true)
+            // {
+            //     string status = $"Proxy [Active {routerServer.ProxyActiveConnections} Tunnels] [In {FormatBytes.FromULONG(routerServer.ProxyCurrentInputBytes)}/Sec] [Out {FormatBytes.FromULONG(routerServer.ProxyCurrentOutputBytes)}/Sec]";
 
-                Console.SetCursorPosition(0, lastStatusLine);
-                Console.Write(status.PadRight(Console.WindowWidth - 1));
+            //     int curLeft = Console.CursorLeft;
+            //     int curTop = Console.CursorTop;
 
-                Console.SetCursorPosition(curLeft, curTop);
-                Thread.Sleep(250);
-            }
+            //     Console.SetCursorPosition(0, lastStatusLine);
+            //     Console.Write(status.PadRight(Console.WindowWidth - 1));
+
+            //     Console.SetCursorPosition(curLeft, curTop);
+            //     Thread.Sleep(250);
+            // }
         }
 
     }
