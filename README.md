@@ -1,6 +1,6 @@
-# 🌐 CENT – Clean & Safe Internet for Everyone
+# 🌐 CNET – Clean & Safe Internet for Everyone
 
-**CENT** is your all-in-one browser protection tool, designed to create a cleaner, safer, and distraction-free internet experience for users of all ages.
+**CNET** is your all-in-one browser protection tool, designed to create a cleaner, safer, and distraction-free internet experience for users of all ages.
 
 > ⚠️ **Note**: This is an early version. Features are currently implemented at a basic level. There's no database or advanced backend structure yet — just basic functionality for testing purposes. Please don’t judge it too harshly; it’s just the beginning!
 
@@ -28,7 +28,7 @@
 
 ---
 
-## ✅ Why Use CENT?
+## ✅ Why Use CNET?
 
 - Simple setup — no technical knowledge required  
 - Lightweight and efficient — won’t slow down your browser  
