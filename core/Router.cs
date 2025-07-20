@@ -1,8 +1,9 @@
+// TODO Add Counter for Each user traffic
+// TODO Fix huge EFCore Query ToList
+
 using System.Net;
 using System.Net.Sockets;
-using System.Reflection;
 using System.Text;
-using System.Text.RegularExpressions;
 using CNET.Core;
 
 namespace CNET
@@ -13,103 +14,44 @@ namespace CNET
         public ulong ProxyCurrentInputBytes = 0;
         public ulong ProxyCurrentOutputBytes = 0;
 
-        private readonly IPEndPoint _bindingHTTPAddress;
-        private readonly IPEndPoint _bindingHTTPSAddress;
-        private readonly Blacklist _blacklist;
-        private readonly HashSet<string> _proxyList;
-        private readonly HashSet<IPAddress> _allowedIPs;
         private TcpListener _httpListener;
         private TcpListener _httpsListener;
         private CancellationTokenSource _cts;
         private Timer _statsResetTimer;
         private DNSClient _dnsClient;
-        private IgnoreWarningCache _ignoreWarningCache;
-        private readonly bool _proxyOnlyWhenLogin;
-        private LoginCache _loginCache;
-        private readonly string _Login;
-        private readonly string _ADS;
-        private readonly string _NSFW;
-        private readonly string _SCAM;
+        private readonly Config _config;
+        private BlockerWebApp _nsfwWebApp;
+        private BlockerWebApp _scamWebApp;
+        private BlockerWebApp _adsWebApp;
+        private HotspotPortalWebApp _hotspotPortalWebApp;
+        private HotspotPanelWebApp _hotspotPanelWebApp;
 
-        public Router(IPEndPoint bindingHTTPAddress, IPEndPoint bindingHTTPSAddress, Blacklist blacklist, HashSet<string> proxyList, DNSClient dnsClient, IgnoreWarningCache ignoreWarningCache, HashSet<IPAddress> allowedIPs, bool proxyOnlyWhenLogin, LoginCache loginCache)
+        public Router(Config config)
         {
-            _bindingHTTPAddress = bindingHTTPAddress;
-            _bindingHTTPSAddress = bindingHTTPSAddress;
-            _blacklist = blacklist;
-            _proxyList = proxyList;
-            _dnsClient = dnsClient;
-            _ignoreWarningCache = ignoreWarningCache;
-            _allowedIPs = allowedIPs;
-            _proxyOnlyWhenLogin = proxyOnlyWhenLogin;
-            _loginCache = loginCache;
+            _config = config;
 
-            var assembly = Assembly.GetExecutingAssembly();
+            _dnsClient = new(_config.ForwardDnsEndpoint);
 
+            _nsfwWebApp = new(DomainType.NSFW);
+            _nsfwWebApp.config = _config;
+            _scamWebApp = new(DomainType.Scam);
+            _scamWebApp.config = _config;
+            _adsWebApp = new(DomainType.Ads);
+            _adsWebApp.config = _config;
 
-            using (Stream stream = assembly.GetManifestResourceStream("CNET.wwwroot.Login.html"))
-            {
-                if (stream == null)
-                {
-                    Console.WriteLine("ADS Resource not found.");
-                    _Login = string.Empty;
-                }
-                else
-                {
-                    using StreamReader reader = new StreamReader(stream);
-                    _Login = reader.ReadToEnd();
-                }
-            }
+            _hotspotPortalWebApp = new();
+            _hotspotPortalWebApp.config = _config;
 
-            using (Stream stream = assembly.GetManifestResourceStream("CNET.wwwroot.ADS.html"))
-            {
-                if (stream == null)
-                {
-                    Console.WriteLine("ADS Resource not found.");
-                    _ADS = string.Empty;
-                }
-                else
-                {
-                    using StreamReader reader = new StreamReader(stream);
-                    _ADS = reader.ReadToEnd();
-                }
-            }
-
-            using (Stream stream = assembly.GetManifestResourceStream("CNET.wwwroot.NSFW.html"))
-            {
-                if (stream == null)
-                {
-                    Console.WriteLine("NSFW Resource not found.");
-                    _NSFW = string.Empty;
-                }
-                else
-                {
-                    using StreamReader reader = new StreamReader(stream);
-                    _NSFW = reader.ReadToEnd();
-                }
-            }
-
-            using (Stream stream = assembly.GetManifestResourceStream("CNET.wwwroot.SCAM.html"))
-            {
-                if (stream == null)
-                {
-                    Console.WriteLine("SCAM Resource not found.");
-                    _SCAM = string.Empty;
-                }
-                else
-                {
-                    using StreamReader reader = new StreamReader(stream);
-                    _SCAM = reader.ReadToEnd();
-                }
-            }
-
+            _hotspotPanelWebApp = new();
+            _hotspotPanelWebApp.config = _config;
         }
 
         public void Start()
         {
             _cts = new CancellationTokenSource();
 
-            _httpListener = new TcpListener(_bindingHTTPAddress);
-            _httpsListener = new TcpListener(_bindingHTTPSAddress);
+            _httpListener = new TcpListener(_config.HttpBindEndpoint);
+            _httpsListener = new TcpListener(_config.HttpsBindEndpoint);
 
             _httpListener.Start();
             _httpsListener.Start();
@@ -150,7 +92,7 @@ namespace CNET
             using (client)
             {
                 IPEndPoint? remoteEndPoint = client.Client.RemoteEndPoint as IPEndPoint;
-                if (remoteEndPoint != null && _allowedIPs.Count > 0 && !_allowedIPs.Contains(remoteEndPoint.Address))
+                if (remoteEndPoint != null && _config.AllowedIPs.Count > 0 && !CidrMatcher.IsIpInCidrList(_config.AllowedIPs, remoteEndPoint.Address.ToString()))
                 {
                     return;
                 }
@@ -192,97 +134,87 @@ namespace CNET
 
                     if (DNSServer.CaptivePortalDomains.Contains(host))
                     {
-                        await RedirectToCaptivatePortal(stream);
+                        await RedirectTo(stream, $"http://{_config.CaptivatePortalDomain}");
                         return;
                     }
 
-                    if (DNSServer.CaptivePortalDomain == host)
+                    if (_config.CaptivatePortalPanelDomain == host)
                     {
-                        var parts = requestLine.Split(' ');
-                        if (parts.Length >= 2)
+                        _hotspotPanelWebApp.ProcessRequest(initialData, reader, writer, client);
+                        return;
+                    }
+
+
+
+                    if (_config.CaptivatePortalDomain == host)
+                    {
+                        _hotspotPortalWebApp.ProcessRequest(initialData, reader, writer, client);
+                        return;
+                    }
+
+                    bool isBlocked = false;
+                    bool isInProxyList = false;
+                    DomainType ResultType;
+                    if (CacheDatabase.Instance.TryGetRecent(host, out ResultType))
+                    {
+                        if (ResultType == DomainType.Proxy)
                         {
-                            string method = parts[0];
-                            string path = parts[1];
-
-
-                            if (method.Equals("POST", StringComparison.OrdinalIgnoreCase) && path.Equals("/login", StringComparison.OrdinalIgnoreCase))
+                            isInProxyList = true;
+                        }
+                        else
+                        {
+                            isBlocked = true;
+                        }
+                    }
+                    else
+                    {
+                        using (AppDbContext context = new())
+                        {
+                            List<Domain> domains = context.Domains.ToList(); // need make this global or something more efficient
+                            Domain searchResult = domains.Find(_domain => WildcardMatcher.IsMatch(_domain.Match, host));
+                            if (searchResult != null)
                             {
-                                for (int i = 0; i < 3; i++)
+                                CacheDatabase.Instance.SetRecent(host, searchResult.Type);
+                                if (searchResult.Type == DomainType.Proxy)
                                 {
-                                    await reader.ReadLineAsync();
-                                }
-                                string password = (await reader.ReadLineAsync()).Split(':')[1].Trim();
-                                string username = (await reader.ReadLineAsync()).Split(':')[1].Trim();
-
-                                const string validUsername = "ucnet";
-                                const string validPassword = "1234567890";
-
-                                if (string.Equals(username, validUsername, StringComparison.Ordinal) &&
-                                    string.Equals(password, validPassword, StringComparison.Ordinal))
-                                {
-                                    if (remoteEndPoint != null)
-                                    {
-                                        _loginCache.Add(remoteEndPoint.Address);
-                                    }
-
-                                    string response = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
-                                    byte[] responseBytes = Encoding.ASCII.GetBytes(response);
-                                    await stream.WriteAsync(responseBytes, 0, responseBytes.Length);
+                                    isInProxyList = true;
                                 }
                                 else
                                 {
-                                    string response = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n";
-                                    byte[] responseBytes = Encoding.ASCII.GetBytes(response);
-                                    await stream.WriteAsync(responseBytes, 0, responseBytes.Length);
+                                    isBlocked = true;
                                 }
-
-                                return;
                             }
-
                         }
-
-                        await SendLoginPageAsync(stream);
-                        return;
                     }
-
-                    var (blocked, type) = _blacklist.Exist(host);
-                    if (blocked)
+                    if (isBlocked && !(remoteEndPoint != null && CacheDatabase.Instance.ContainsIgnore(host, remoteEndPoint.Address)))
                     {
-                        var parts = requestLine.Split(' ');
-                        if (parts.Length >= 2)
+                        switch (ResultType)
                         {
-                            string method = parts[0];
-                            string path = parts[1];
-
-                            if (method.Equals("POST", StringComparison.OrdinalIgnoreCase) &&
-                                path.Equals("/ignore", StringComparison.OrdinalIgnoreCase))
-                            {
-                                if (remoteEndPoint != null)
-                                {
-                                    _ignoreWarningCache.Add(host, remoteEndPoint.Address);
-                                }
-
-                                string response = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
-                                byte[] responseBytes = Encoding.ASCII.GetBytes(response);
-                                await stream.WriteAsync(responseBytes, 0, responseBytes.Length);
-                                return;
-                            }
+                            case DomainType.NSFW:
+                                _nsfwWebApp.ProcessRequest(initialData, reader, writer, client);
+                                break;
+                            case DomainType.Scam:
+                                _scamWebApp.ProcessRequest(initialData, reader, writer, client);
+                                break;
+                            case DomainType.Ads:
+                                _adsWebApp.ProcessRequest(initialData, reader, writer, client);
+                                break;
                         }
-
-                        if (!(remoteEndPoint != null && _ignoreWarningCache.Contains(host, remoteEndPoint.Address)))
-                        {
-                            await SendBlockPageAsync(stream, type);
-                            return;
-                        }
+                        return;
                     }
 
-                    if (_proxyOnlyWhenLogin && !_loginCache.Contains(remoteEndPoint.Address))
+                    if (_config.CaptivatePortal && !CacheDatabase.Instance.ContainsLogin(remoteEndPoint.Address))
                         return;
 
-                    if (IsInList.Exist(_proxyList, host))
+                    if (isInProxyList)
                         await ProxyTcpAsync(client, host, 80, initialData);
                 }
-                catch { }
+                catch (Exception e)
+                {
+#if DEBUG
+                    Console.WriteLine(e);
+#endif
+                }
             }
         }
 
@@ -291,7 +223,7 @@ namespace CNET
             using (client)
             {
                 IPEndPoint? remoteEndPoint = client.Client.RemoteEndPoint as IPEndPoint;
-                if (remoteEndPoint != null && _allowedIPs.Count > 0 && !_allowedIPs.Contains(remoteEndPoint.Address))
+                if (remoteEndPoint != null && _config.AllowedIPs.Count > 0 && !CidrMatcher.IsIpInCidrList(_config.AllowedIPs, remoteEndPoint.Address.ToString()))
                 {
                     return;
                 }
@@ -312,19 +244,52 @@ namespace CNET
                 }
 #endif
 
-                var (blocked, type) = _blacklist.Exist(sni);
-                if (blocked)
+                bool isBlocked = false;
+                bool isInProxyList = false;
+                DomainType ResultType;
+                if (CacheDatabase.Instance.TryGetRecent(sni, out ResultType))
                 {
-                    if (!(remoteEndPoint != null && _ignoreWarningCache.Contains(sni, remoteEndPoint.Address)))
+                    if (ResultType == DomainType.Proxy)
+                    {
+                        isInProxyList = true;
+                    }
+                    else
+                    {
+                        isBlocked = true;
+                    }
+                }
+                else
+                {
+                    using (AppDbContext context = new())
+                    {
+                        List<Domain> domains = context.Domains.ToList(); // need make this global or something more efficient
+                        Domain searchResult = domains.Find(_domain => WildcardMatcher.IsMatch(_domain.Match, sni));
+                        if (searchResult != null)
+                        {
+                            CacheDatabase.Instance.SetRecent(sni, searchResult.Type);
+                            if (searchResult.Type == DomainType.Proxy)
+                            {
+                                isInProxyList = true;
+                            }
+                            else
+                            {
+                                isBlocked = true;
+                            }
+                        }
+                    }
+                }
+                if (isBlocked)
+                {
+                    if (!(remoteEndPoint != null && CacheDatabase.Instance.ContainsIgnore(sni, remoteEndPoint.Address)))
                     {
                         return;
                     }
                 }
 
-                if (_proxyOnlyWhenLogin && !_loginCache.Contains(remoteEndPoint.Address))
+                if (_config.CaptivatePortal && !CacheDatabase.Instance.ContainsLogin(remoteEndPoint.Address))
                     return;
 
-                if (IsInList.Exist(_proxyList, sni))
+                if (isInProxyList)
                     await ProxyTcpAsync(client, sni, 443, buffer[..read]);
             }
         }
@@ -387,29 +352,14 @@ namespace CNET
             catch { }
         }
 
-        private async Task SendBlockPageAsync(NetworkStream stream, BlacklistType type)
+        private async Task RedirectTo(NetworkStream stream, string address)
         {
-            string html = type == BlacklistType.NSFW ? _NSFW : type == BlacklistType.ADS ? _ADS : _SCAM;
-            string response = $"HTTP/1.1 403 Forbidden\r\nContent-Type: text/html\r\nContent-Length: {Encoding.UTF8.GetByteCount(html)}\r\n\r\n{html}";
+            string response = $"HTTP/1.1 302 Found\r\nLocation: {address}\r\nContent-Length: 0\r\n\r\n";
             byte[] bytes = Encoding.UTF8.GetBytes(response);
             await stream.WriteAsync(bytes);
         }
 
-        private async Task SendLoginPageAsync(NetworkStream stream)
-        {
-            string response = $"HTTP/1.1 200 Forbidden\r\nContent-Type: text/html\r\nContent-Length: {Encoding.UTF8.GetByteCount(_Login)}\r\n\r\n{_Login}";
-            byte[] bytes = Encoding.UTF8.GetBytes(response);
-            await stream.WriteAsync(bytes);
-        }
-
-        private async Task RedirectToCaptivatePortal(NetworkStream stream)
-        {
-            string response = $"HTTP/1.1 302 Found\r\nLocation: http://{DNSServer.CaptivePortalDomain}\r\nContent-Length: 0\r\n\r\n";
-            byte[] bytes = Encoding.UTF8.GetBytes(response);
-            await stream.WriteAsync(bytes);
-        }
-
-        private string ExtractSNIFromClientHello(byte[] data)
+        private string? ExtractSNIFromClientHello(byte[] data)
         {
             try
             {

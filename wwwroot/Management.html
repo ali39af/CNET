@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login</title>
+    <title>CNET - Hotspot Management</title>
     <style>
         * {
             margin: 0;
@@ -14,19 +14,24 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: #f5f5f5;
+            background-color: #f8f9fa;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .login-container {
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;
+            background-color: #f8f9fa;
         }
 
-        .login-container {
+        .login-box {
             background: white;
             padding: 40px;
             border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
             width: 100%;
             max-width: 400px;
         }
@@ -37,9 +42,9 @@
         }
 
         .login-header h1 {
-            color: #333;
+            color: #2c3e50;
             font-size: 24px;
-            font-weight: 600;
+            margin-bottom: 8px;
         }
 
         .form-group {
@@ -49,104 +54,348 @@
         .form-group label {
             display: block;
             margin-bottom: 6px;
-            color: #555;
-            font-size: 14px;
             font-weight: 500;
+            color: #2c3e50;
         }
 
         .form-group input {
             width: 100%;
             padding: 12px;
             border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 16px;
-            transition: border-color 0.3s ease;
+            border-radius: 6px;
+            font-size: 14px;
         }
 
         .form-group input:focus {
             outline: none;
-            border-color: #007bff;
-            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+            border-color: #3498db;
         }
 
-        .login-button {
-            width: 100%;
-            padding: 12px;
-            background-color: #007bff;
-            color: white;
+        .btn {
+            padding: 12px 24px;
             border: none;
-            border-radius: 4px;
-            font-size: 16px;
-            font-weight: 500;
+            border-radius: 6px;
             cursor: pointer;
-            transition: background-color 0.3s ease;
+            font-size: 14px;
+            font-weight: 500;
         }
 
-        .login-button:hover {
-            background-color: #0056b3;
+        .btn-primary {
+            background-color: #3498db;
+            color: white;
+            width: 100%;
         }
 
-        .login-button:active {
-            background-color: #004085;
+        .btn-primary:hover {
+            background-color: #2980b9;
         }
 
         .error-message {
-            color: #dc3545;
+            color: #e74c3c;
             font-size: 14px;
             margin-top: 10px;
-            text-align: center;
             display: none;
         }
 
-        .success-message {
-            color: #28a745;
-            font-size: 14px;
-            margin-top: 10px;
-            text-align: center;
+        .dashboard {
             display: none;
+            min-height: 100vh;
         }
 
-        @media (max-width: 480px) {
-            .login-container {
-                padding: 30px 20px;
-                margin: 10px;
+        .sidebar {
+            width: 250px;
+            background: white;
+            border-right: 1px solid #e9ecef;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .sidebar-header h2 {
+            color: #2c3e50;
+            font-size: 18px;
+        }
+
+        .sidebar-nav {
+            padding: 20px 0;
+        }
+
+        .nav-item {
+            display: block;
+            padding: 12px 20px;
+            color: #495057;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .nav-item:hover,
+        .nav-item.active {
+            background-color: #f8f9fa;
+            color: #3498db;
+        }
+
+        .main-content {
+            margin-left: 250px;
+            padding: 20px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 28px;
+            font-weight: bold;
+            color: #3498db;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+
+        .content-section {
+            display: none;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .content-section.active {
+            display: block;
+        }
+
+        .section-header {
+            padding: 20px;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .section-title {
+            color: #2c3e50;
+            font-size: 18px;
+        }
+
+        .btn-success {
+            background-color: #27ae60;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background-color: #219a52;
+        }
+
+        .btn-danger {
+            background-color: #e74c3c;
+            color: white;
+            padding: 8px 16px;
+            font-size: 12px;
+        }
+
+        .btn-danger:hover {
+            background-color: #c0392b;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .status-online {
+            color: #27ae60;
+            font-weight: 500;
+        }
+
+        .status-offline {
+            color: #e74c3c;
+            font-weight: 500;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            margin: 10% auto;
+            padding: 30px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+        }
+
+        .modal-header {
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            color: #2c3e50;
+            font-size: 18px;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 15px;
+        }
+
+        .form-row .form-group {
+            flex: 1;
+        }
+
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+            margin-left: 10px;
+        }
+
+        .btn-secondary:hover {
+            background-color: #5a6268;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                height: auto;
+                position: static;
             }
 
-            .login-header h1 {
-                font-size: 22px;
+            .main-content {
+                margin-left: 0;
             }
 
-            .form-group input,
-            .login-button {
-                padding: 14px 12px;
-                font-size: 16px;
+            .stats-grid {
+                grid-template-columns: 1fr;
             }
         }
     </style>
 </head>
 
 <body>
-    <div class="login-container">
-        <div class="login-header">
-            <h1>Login</h1>
+    <div id="loginPage" class="login-container">
+        <div class="login-box">
+            <div class="login-header">
+                <h1>CNET Management</h1>
+            </div>
+            <form onsubmit="login(event)">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Sign In</button>
+                <div id="loginError" class="error-message">Invalid credentials</div>
+            </form>
+        </div>
+    </div>
+
+    <div id="dashboard" class="dashboard">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2>CNET Admin</h2>
+            </div>
+            <nav class="sidebar-nav">
+                <a class="nav-item active" onclick="showSection('hotspot')">Hotspot Users</a>
+                <a class="nav-item" onclick="logout()">Logout</a>
+            </nav>
         </div>
 
-        <form id="loginForm">
-            <div class="form-group">
-                <label for="username">Username</label>
-                <input type="text" id="username" name="username" required>
+        <div class="main-content">
+
+            <div id="hotspot" class="content-section active">
+                <div class="section-header">
+                    <h2 class="section-title">Hotspot Users</h2>
+                    <div>
+                        <button class="btn btn-success" onclick="loadUsers()">Refresh</button>
+                        <button class="btn btn-success" onclick="openModal()">Add User</button>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Status</th>
+                            <th>Data In</th>
+                            <th>Data Out</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="userTable">
+                    </tbody>
+                </table>
             </div>
+        </div>
+    </div>
 
-            <div class="form-group">
-                <label for="password">Password</label>
-                <input type="password" id="password" name="password" required>
+    <div id="userModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Add New User</h3>
             </div>
-
-            <button type="submit" class="login-button">Login</button>
-
-            <div class="error-message" id="errorMessage"></div>
-            <div class="success-message" id="successMessage"></div>
-        </form>
+            <form onsubmit="saveUser(event)">
+                <input type="text" style="display: none;" id="modalUserId">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input type="text" id="modalUsername" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="modalPassword" required>
+                    </div>
+                </div>
+                <div style="margin-top: 20px; text-align: right;">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-success">Save</button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <script>
@@ -162,24 +411,19 @@
         }));
     </script>
     <script>
+        let users = [];
+
+        let authHash = "";
+
         function sha512(text) {
             return CryptoJS.SHA512(text).toString();
         }
 
-        document.getElementById("loginForm").addEventListener("submit", async function (e) {
+        async function login(e) {
             e.preventDefault();
-
-            const username = document.getElementById("username").value;
-            const password = document.getElementById("password").value;
-            const errorMessage = document.getElementById("errorMessage");
-            const successMessage = document.getElementById("successMessage");
-            const loginButton = document.querySelector(".login-button");
-
-            errorMessage.style.display = "none";
-            successMessage.style.display = "none";
-
-            loginButton.textContent = "Signing in...";
-            loginButton.disabled = true;
+            const user = document.getElementById("username").value;
+            const pass = document.getElementById("password").value;
+            authHash = await sha512(pass);
 
             try {
                 const response = await fetch("/login", {
@@ -188,32 +432,144 @@
                         "Content-Type": "application/json"
                     },
                     body: JSON.stringify({
-                        Username: username,
-                        Password: sha512(password)
+                        Username: user,
+                        Password: authHash
                     })
                 });
 
-
                 if (response.ok) {
-                    successMessage.textContent = "Login successful!";
-                    successMessage.style.display = "block";
-
-                    setTimeout(() => {
-                        location.replace("https://google.com")
-                    }, 1000);
+                    document.getElementById("loginPage").style.display = "none";
+                    document.getElementById("dashboard").style.display = "block";
+                    await loadUsers();
                 } else {
-                    const errorData = await response.json();
-                    errorMessage.textContent = errorData.message || "Login failed. Please try again.";
-                    errorMessage.style.display = "block";
+                    document.getElementById("loginError").style.display = "block";
                 }
             } catch (error) {
-                errorMessage.textContent = "Network error. Please try again.";
-                errorMessage.style.display = "block";
-            } finally {
-                loginButton.textContent = "Login";
-                loginButton.disabled = false;
+                document.getElementById("loginError").style.display = "block";
             }
-        });
+        }
+
+        function logout() {
+            document.getElementById("loginPage").style.display = "flex";
+            document.getElementById("dashboard").style.display = "none";
+            document.getElementById("username").value = "";
+            document.getElementById("password").value = "";
+            document.getElementById("loginError").style.display = "none";
+            authHash = "";
+        }
+
+        function showSection(section) {
+            document.querySelectorAll(".content-section").forEach(s => s.classList.remove("active"));
+            document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
+            document.getElementById(section).classList.add("active");
+            event.target.classList.add("active");
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return "0 B";
+            const k = 1024;
+            const sizes = ["B", "KB", "MB", "GB"];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+        }
+
+        async function loadUsers() {
+            try {
+                const response = await fetch("/users", {
+                    method: "GET",
+                    headers: { "Auth": authHash }
+                });
+                if (response.ok) {
+                    users = await response.json();
+                }
+            } catch (err) {
+                console.warn("Failed to fetch users from backend:", err);
+            }
+
+            const tbody = document.getElementById("userTable");
+            tbody.innerHTML = "";
+            users.forEach(user => {
+                const row = `
+            <tr>
+                <td>${user.Username}</td>
+                <td><span class="status-${user.Status}">${user.Status.toUpperCase()}</span></td>
+                <td>${formatBytes(user.DataInBytes)}</td>
+                <td>${formatBytes(user.DataOutBytes)}</td>
+                <td>
+                    <button class="btn btn-danger" onclick="deleteUser(${user.Id})">Delete</button>
+                </td>
+            </tr>
+        `;
+                tbody.innerHTML += row;
+            });
+        }
+
+        function openModal() {
+            document.getElementById("userModal").style.display = "block";
+            document.getElementById("modalUsername").value = "";
+            document.getElementById("modalPassword").value = "";
+            document.getElementById("modalUserId").value = "";
+        }
+
+        function closeModal() {
+            document.getElementById("userModal").style.display = "none";
+        }
+
+        async function saveUser(e) {
+            e.preventDefault();
+            const username = document.getElementById("modalUsername").value;
+            const password = document.getElementById("modalPassword").value;
+            const id = document.getElementById("modalUserId").value;
+
+            const newUser = {
+                ...(id ? { Id: parseInt(id) } : {}),
+                Username: username,
+                Password: password.length == 128 ? password : sha512(password),
+            };
+
+            try {
+                const response = await fetch(`/users`, {
+                    method: id ? "PUT" : "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Auth": authHash,
+                    },
+                    body: JSON.stringify(newUser),
+                });
+
+                if (response.ok) {
+                    await loadUsers();
+                    closeModal();
+                } else {
+                    alert("Failed to save user.");
+                }
+            } catch (err) {
+                console.error("Error saving user:", err);
+            }
+        }
+
+        async function deleteUser(id) {
+            if (confirm("Delete this user?")) {
+                try {
+                    const response = await fetch(`/users`, {
+                        method: "DELETE",
+                        headers: {
+                            "Content-Type": "plain/text",
+                            "Auth": authHash,
+                        },
+                        body: id.toString()
+                    });
+
+                    if (response.ok) {
+                        await loadUsers();
+                    } else {
+                        alert("Failed to delete user.");
+                    }
+                } catch (err) {
+                    console.error("Error deleting user:", err);
+                }
+            }
+        }
     </script>
 </body>
 

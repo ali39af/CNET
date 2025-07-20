@@ -6,14 +6,13 @@ namespace CNET
 {
     public class DNSClient
     {
-        private readonly string _dnsServer;
-        private readonly int _dnsPort;
+        private readonly IPEndPoint _dnsServer;
         private readonly Dictionary<string, CacheEntry> _cache = new Dictionary<string, CacheEntry>();
 
-        public DNSClient(string dnsServer = "8.8.8.8", int dnsPort = 53)
+        public DNSClient(IPEndPoint? dnsServer = null)
         {
+            dnsServer ??= new(IPAddress.Parse("8.8.8.8"), 53);
             _dnsServer = dnsServer;
-            _dnsPort = dnsPort;
         }
 
         public async Task<IPAddress[]> ResolveAAsync(string domain)
@@ -53,7 +52,7 @@ namespace CNET
         private async Task<(IPAddress[] addresses, int ttl)> QueryDnsAsync(string domain, bool isAAAA)
         {
             var query = BuildDnsQuery(domain, isAAAA);
-            var response = await SendDnsQueryAsync(query, _dnsServer, _dnsPort);
+            var response = await SendDnsQueryAsync(query, _dnsServer.Address.ToString(), _dnsServer.Port);
             return ParseDnsResponse(response, isAAAA);
         }
 

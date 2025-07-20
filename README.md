@@ -41,12 +41,13 @@
 
 | Feature                                   | Status       | Description                                                                 |
 |------------------------------------------|--------------|-----------------------------------------------------------------------------|
-| Database Integration                     | ❌ Not yet    | Store user data, configurations, logs. we plan to use EF Core              |
+| Database Integration                     | ✔️ Finished   | Store user data, configurations, logs. we plan to use EF Core              |
 | QUIC / HTTP/3 Protocol Support           | ❌ Not yet    | Enable faster and modern proxy connectivity                                |
-| User Bandwidth & Speed Control           | ❌ Not yet    | Manage and limit traffic per user                                          |
-| Proxy Management Dashboard               | ❌ Not yet    | Admin panel to manage and monitor proxy traffic/users                      |
+| User Bandwidth | Speed Control           | ❌ Not yet    | Manage and limit traffic per user                                          |
+| Proxy Management Dashboard               | ✔️ Finished   | Admin panel to manage and monitor proxy traffic/users                      |
 | Subscription System for Providers        | ❌ Not yet    | Allow providers to offer paid proxy access                                 |
 | Load Balancing for Proxy Infrastructure  | ❌ Not yet    | Horizontal scaling to support high number of users efficiently             |
+| IPV6 Support                             | ❌ Not yet    | can connect to DNS, Router via IPV6 currently we have a little IPV6 Config |
 
 ---
 

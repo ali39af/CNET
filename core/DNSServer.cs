@@ -1,20 +1,13 @@
+// TODO Find Match domain from Domains in Database without Fetch all and Search
+
 using System.Net;
 using System.Net.Sockets;
-using System.Text.RegularExpressions;
 
 namespace CNET.Core
 {
     public class DNSServer
     {
-        private readonly IPAddress _webIPv4;
-        private readonly IPAddress _webIPv6;
-        private readonly IPEndPoint _forwardDns;
-        private readonly Blacklist _blacklist;
-        private readonly HashSet<string> _proxyList;
-        private readonly IPEndPoint _bindingAddress;
-        private readonly HashSet<IPAddress> _allowedIPs;
-        private readonly bool _proxyOnlyWhenLogin;
-        public static readonly string CaptivePortalDomain = "cnet.net";
+        private readonly Config _config;
         public static readonly HashSet<string> CaptivePortalDomains = new()
         {
             "connectivitycheck.gstatic.com",
@@ -41,29 +34,18 @@ namespace CNET.Core
             "walledgarden.com"
         };
 
-        private IgnoreWarningCache _ignoreWarningCache;
-        private LoginCache _loginCache;
         private UdpClient? _udpServer;
         private CancellationTokenSource? _cts;
 
-        public DNSServer(IPEndPoint bindingAddress, Blacklist blacklist, HashSet<string> proxyList, IPEndPoint forwardDns, IPAddress webIPv4, IPAddress webIPv6, IgnoreWarningCache ignoreWarningCache, HashSet<IPAddress> allowedIPs, bool proxyOnlyWhenLogin, LoginCache loginCache)
+        public DNSServer(Config config)
         {
-            _bindingAddress = bindingAddress;
-            _blacklist = blacklist;
-            _proxyList = proxyList;
-            _forwardDns = forwardDns;
-            _webIPv4 = webIPv4;
-            _webIPv6 = webIPv6;
-            _ignoreWarningCache = ignoreWarningCache;
-            _allowedIPs = allowedIPs;
-            _proxyOnlyWhenLogin = proxyOnlyWhenLogin;
-            _loginCache = loginCache;
+            _config = config;
         }
 
         public void Start()
         {
             _cts = new CancellationTokenSource();
-            _udpServer = new UdpClient(_bindingAddress);
+            _udpServer = new UdpClient(_config.DnsBindEndpoint);
 
             var token = _cts.Token;
 
@@ -76,7 +58,7 @@ namespace CNET.Core
                         IPEndPoint client = new(IPAddress.Loopback, 0);
                         byte[] req = _udpServer.Receive(ref client);
 
-                        if (_allowedIPs.Count > 0 && !_allowedIPs.Contains(client.Address))
+                        if (_config.AllowedIPs.Count > 0 && !CidrMatcher.IsIpInCidrList(_config.AllowedIPs, client.Address.ToString()))
                         {
                             return;
                         }
@@ -113,23 +95,59 @@ namespace CNET.Core
             try
             {
                 string domain = ExtractDomain(req);
-                var (isBlocked, _) = _blacklist.Exist(domain);
+                bool isBlocked = false;
+                bool isInProxyList = false;
+                DomainType ResultType;
+                if (CacheDatabase.Instance.TryGetRecent(domain, out ResultType))
+                {
+                    if (ResultType == DomainType.Proxy)
+                    {
+                        isInProxyList = true;
+                    }
+                    else
+                    {
+                        isBlocked = true;
+                    }
+                }
+                else
+                {
+                    using (AppDbContext context = new())
+                    {
+                        List<Domain> domains = context.Domains.ToList(); // need make this global or something more efficient
+                        Domain searchResult = domains.Find(_domain => WildcardMatcher.IsMatch(_domain.Match, domain));
+                        if (searchResult != null)
+                        {
+                            CacheDatabase.Instance.SetRecent(domain, searchResult.Type);
+                            if (searchResult.Type == DomainType.Proxy)
+                            {
+                                isInProxyList = true;
+                            }
+                            else
+                            {
+                                isBlocked = true;
+                            }
+                        }
+                    }
+                }
+
                 var type = GetQueryType(req);
 
                 if (isBlocked)
-                    isBlocked = !_ignoreWarningCache.Contains(domain, client.Address);
+                    isBlocked = !CacheDatabase.Instance.ContainsIgnore(domain, client.Address);
 
-                bool isInProxyList = !isBlocked ? IsInList.Exist(_proxyList, domain) : false;
 
-                bool isRedirected = (isBlocked && (type == QueryType.A || type == QueryType.AAAA)) || isInProxyList;
+                bool isRedirected = (isBlocked || isInProxyList) && (type == QueryType.A || type == QueryType.AAAA);
 
-                if (CaptivePortalDomains.Contains(domain) && !_loginCache.Contains(client.Address))
+                if (CaptivePortalDomains.Contains(domain) && !CacheDatabase.Instance.ContainsLogin(client.Address))
                 {
                     isRedirected = true;
-                    isBlocked = true; // just for now for ttl 1sec on next version we clean up here
                 }
 
-                if (CaptivePortalDomain == domain)
+                if (_config.CaptivatePortalDomain == domain)
+                    isRedirected = true;
+
+
+                if (_config.CaptivatePortalPanelDomain == domain)
                     isRedirected = true;
 
 #if DEBUG
@@ -139,7 +157,7 @@ namespace CNET.Core
 
 
                 byte[] res = isRedirected
-                    ? CreateLocalResponse(req, isBlocked ? 1 : 30)
+                    ? CreateLocalResponse(req)
                     : ForwardRequest(req);
 
                 _udpServer?.Send(res, res.Length, client);
@@ -199,7 +217,7 @@ namespace CNET.Core
             return Enum.IsDefined(typeof(QueryType), qtype) ? (QueryType)qtype : QueryType.Unknown;
         }
 
-        private byte[] CreateLocalResponse(byte[] req, int ttl = 30)
+        private byte[] CreateLocalResponse(byte[] req, int ttl = 60)
         {
             using var ms = new MemoryStream();
             ms.Write(req, 0, 12);
@@ -219,7 +237,7 @@ namespace CNET.Core
             ms.Write(req, 12, qEnd - 12);
 
             bool isAAAA = ((req[qEnd - 4] << 8) | req[qEnd - 3]) == 28;
-            byte[] ip = isAAAA ? _webIPv6.GetAddressBytes() : _webIPv4.GetAddressBytes();
+            byte[] ip = isAAAA ? _config.RouterIPV6.GetAddressBytes() : _config.RouterIPV4.GetAddressBytes();
 
             ms.Write([
                 0xC0, 0x0C,
@@ -257,7 +275,7 @@ namespace CNET.Core
             {
                 using var client = new UdpClient();
                 client.Client.ReceiveTimeout = 1900;
-                client.Connect(_forwardDns);
+                client.Connect(_config.ForwardDnsEndpoint);
                 client.Send(req, req.Length);
 
                 IPEndPoint ep = new(IPAddress.Any, 0);

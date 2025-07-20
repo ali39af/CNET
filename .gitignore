@@ -3,3 +3,9 @@ obj/
 
 /node_modules
 /wwwroot/node_modules
+
+cnet.db
+cnet.db-shm
+cnet.db-wal
+
+config.conf
